@@ -4,20 +4,19 @@ from discord.ext import commands, tasks
 from datetime import datetime, timedelta
 
 # 🔐 Lấy token từ biến môi trường (Render -> Environment Variables)
-TOKEN = os.getenv("TOKEN")
+TOKEN = os.getenv("TOKEN")  # hoặc "DISCORD_TOKEN" nếu bạn đặt vậy trên Render
 
-# ⚙️ Cấu hình intents (quan trọng để đọc member & activity)
+# ⚙️ Cấu hình intents
 intents = discord.Intents.default()
 intents.members = True
 intents.guilds = True
-intents.presences = True  # Cần để kiểm tra trạng thái hoạt động
+intents.presences = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# 💤 Cấu hình thông số bot
+# 💤 Cấu hình
 INACTIVE_DAYS = 30
 ROLE_NAME = "💤 Tín Đồ Ngủ Đông"
 
-# 🔁 Vòng lặp kiểm tra hoạt động mỗi 24 giờ
 @tasks.loop(hours=24)
 async def check_inactivity():
     print("🔍 Bắt đầu kiểm tra thành viên không hoạt động...")
@@ -31,9 +30,7 @@ async def check_inactivity():
             if member.bot:
                 continue
 
-            # Nếu người chơi không hoạt động trong khoảng thời gian quy định
             if member.joined_at < datetime.utcnow() - timedelta(days=INACTIVE_DAYS):
-                # Nếu không có hoạt động (offline lâu)
                 if member.activity is None and str(member.status) == "offline":
                     try:
                         await member.add_roles(role)
@@ -45,20 +42,18 @@ async def check_inactivity():
 
     print("✅ Kiểm tra hoàn tất!")
 
-# 🟢 Khi bot online
 @bot.event
 async def on_ready():
     print(f"🤖 Bot {bot.user} đã online!")
     await bot.change_presence(activity=discord.Game("Theo dõi tín đồ 😴"))
     check_inactivity.start()
 
-# Lệnh test
 @bot.command()
 async def test(ctx):
     await ctx.send("Bot đang hoạt động và kiểm tra mỗi 24h 🕓")
 
 # 🚀 Chạy bot
 if TOKEN:
-    bot.run(MTQyNTUyOTcxNDUyODg4MjczMg.G2NANG.5P-yCtnxvHMdEOBru9une0YtSLzBCwv9xE9Km8)
+    bot.run(TOKEN)
 else:
     print("❌ Không tìm thấy TOKEN trong biến môi trường!")
