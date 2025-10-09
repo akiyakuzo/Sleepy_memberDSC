@@ -2,25 +2,33 @@ import os
 import discord
 from discord.ext import commands, tasks
 from datetime import datetime, timedelta, timezone
+from flask import Flask
+from threading import Thread
 
-# 🔐 Lấy token từ biến môi trường (Render -> Environment Variables)
-TOKEN = os.getenv("TOKEN")  # hoặc "DISCORD_TOKEN" nếu bạn đặt vậy trên Render
-
-# ⚙️ Cấu hình intents
+TOKEN = os.getenv("TOKEN")
 intents = discord.Intents.default()
 intents.members = True
 intents.guilds = True
 intents.presences = True
-intents.message_content = True
+intents.message_content = True  # Bật intents cho lệnh text
+
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# 💤 Cấu hình
+# Flask để Render health check
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "Bot đang chạy!"
+
+Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))).start()
+
 INACTIVE_DAYS = 30
 ROLE_NAME = "💤 Tín Đồ Ngủ Đông"
 
 @tasks.loop(hours=24)
 async def check_inactivity():
-    print("🔍 Bắt đầu kiểm tra thành viên không hoạt động...")
+    print("🔍 Kiểm tra thành viên không hoạt động...")
     for guild in bot.guilds:
         role = discord.utils.get(guild.roles, name=ROLE_NAME)
         if not role:
@@ -30,18 +38,15 @@ async def check_inactivity():
         for member in guild.members:
             if member.bot:
                 continue
-
-            # ✅ Sửa lỗi timezone: dùng datetime.now(timezone.utc) thay vì utcnow()
             if member.joined_at < datetime.now(timezone.utc) - timedelta(days=INACTIVE_DAYS):
                 if member.activity is None and str(member.status) == "offline":
                     try:
                         await member.add_roles(role)
                         print(f"✅ Đã gán role '{ROLE_NAME}' cho {member.name}")
                     except discord.Forbidden:
-                        print(f"🚫 Không đủ quyền để gán role cho {member.name}")
+                        print(f"🚫 Không đủ quyền cho {member.name}")
                     except Exception as e:
-                        print(f"⚠️ Lỗi khi gán role cho {member.name}: {e}")
-
+                        print(f"⚠️ Lỗi: {e}")
     print("✅ Kiểm tra hoàn tất!")
 
 @bot.event
@@ -52,11 +57,9 @@ async def on_ready():
 
 @bot.command()
 async def test(ctx):
-    await ctx.send("✅ Bot đang hoạt động và kiểm tra mỗi 24h 🕓")
+    await ctx.send("✅ Bot đang hoạt động!")
 
-# 🚀 Chạy bot
 if TOKEN:
     bot.run(TOKEN)
 else:
     print("❌ Không tìm thấy TOKEN trong biến môi trường!")
-
