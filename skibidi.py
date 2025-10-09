@@ -11,6 +11,7 @@ intents = discord.Intents.default()
 intents.members = True
 intents.guilds = True
 intents.presences = True
+intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # 💤 Cấu hình
@@ -58,3 +59,4 @@ if TOKEN:
     bot.run(TOKEN)
 else:
     print("❌ Không tìm thấy TOKEN trong biến môi trường!")
+
