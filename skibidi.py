@@ -1,7 +1,7 @@
 import os
 import discord
 from discord.ext import commands, tasks
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # 🔐 Lấy token từ biến môi trường (Render -> Environment Variables)
 TOKEN = os.getenv("TOKEN")  # hoặc "DISCORD_TOKEN" nếu bạn đặt vậy trên Render
@@ -30,7 +30,8 @@ async def check_inactivity():
             if member.bot:
                 continue
 
-            if member.joined_at < datetime.utcnow() - timedelta(days=INACTIVE_DAYS):
+            # ✅ Sửa lỗi timezone: dùng datetime.now(timezone.utc) thay vì utcnow()
+            if member.joined_at < datetime.now(timezone.utc) - timedelta(days=INACTIVE_DAYS):
                 if member.activity is None and str(member.status) == "offline":
                     try:
                         await member.add_roles(role)
@@ -50,7 +51,7 @@ async def on_ready():
 
 @bot.command()
 async def test(ctx):
-    await ctx.send("Bot đang hoạt động và kiểm tra mỗi 24h 🕓")
+    await ctx.send("✅ Bot đang hoạt động và kiểm tra mỗi 24h 🕓")
 
 # 🚀 Chạy bot
 if TOKEN:
