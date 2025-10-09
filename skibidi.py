@@ -162,17 +162,33 @@ async def removerole(ctx, member: discord.Member):
         await ctx.send(f"⚠️ Lỗi: {e}")
         print(f"⚠️ Lỗi gỡ role cho {member.name}: {e}")
 
+# ===== Command: Check inacvity =====
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def runcheck(ctx):
+    """Chạy kiểm tra inactivity ngay lập tức"""
+    if check_inactivity.is_running():
+        await ctx.send("⚠️ Task check_inactivity đang chạy, vui lòng đợi.")
+        return
+    await ctx.send("⏳ Bắt đầu kiểm tra inactivity ngay lập tức...")
+    await check_inactivity()
+    await ctx.send("✅ Hoàn tất kiểm tra inactivity!")
+
 # ===== Event: bot ready =====
 @bot.event
 async def on_ready():
     print(f"🤖 Bot {bot.user} đã online!")
     await bot.change_presence(activity=discord.Game("Theo dõi tín đồ 😴"))
-    check_inactivity.start()
-    print("🟢 Task check_inactivity đã được start")
-
+    if not check_inactivity.is_running():
+        check_inactivity.start()
+        print("🟢 Task check_inactivity đã được start")
+    else:
+        print("ℹ️ Task check_inactivity đã chạy trước đó, không start lại")
+        
 # ===== Run bot =====
 if TOKEN:
     print("🟢 Bắt đầu chạy bot...")
     bot.run(TOKEN)
 else:
     print("❌ Không tìm thấy TOKEN trong biến môi trường!")
+
