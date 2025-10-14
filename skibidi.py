@@ -6,6 +6,8 @@ import sqlite3
 from flask import Flask
 from threading import Thread
 import pathlib
+import csv
+
 
 # ===== Path cho DB nằm trong repo =====
 BASE_DIR = pathlib.Path(__file__).parent
@@ -168,6 +170,40 @@ async def exportdb(ctx):
     else:
         await ctx.send("❌ Không tìm thấy file database.")
 
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def exportcsv(ctx):
+    """Xuất database inactivity thành file CSV có tên người dùng"""
+    csv_path = BASE_DIR / "inactivity_export.csv"
+
+    if not os.path.exists(DB_PATH):
+        await ctx.send("❌ Không tìm thấy file database.")
+        return
+
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT member_id, guild_id, last_seen, role_added FROM inactivity")
+    rows = c.fetchall()
+    conn.close()
+
+    if not rows:
+        await ctx.send("⚠️ Database trống, không có dữ liệu để xuất.")
+        return
+
+    # Ghi file CSV kèm tên user
+    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["member_id", "member_name", "guild_id", "last_seen", "role_added"])
+
+        for row in rows:
+            guild = bot.get_guild(int(row["guild_id"]))
+            member = guild.get_member(int(row["member_id"])) if guild else None
+            member_name = f"{member.name}#{member.discriminator}" if member else "Không tìm thấy"
+            writer.writerow([row["member_id"], member_name, row["guild_id"], row["last_seen"], row["role_added"]])
+
+    await ctx.send("✅ Đã xuất file CSV có tên người dùng:", file=discord.File(csv_path))
+    os.remove(csv_path)  # Xóa file sau khi gửi (nếu muốn)
+
 # ===== Command: list offline members (CÓ hiển thị số ngày offline) =====
 @bot.command()
 async def list_off(ctx):
@@ -240,4 +276,5 @@ if TOKEN:
     bot.run(TOKEN)
 else:
     print("❌ Không tìm thấy TOKEN trong biến môi trường!")
+
 
