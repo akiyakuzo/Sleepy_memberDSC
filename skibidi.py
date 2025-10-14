@@ -8,8 +8,8 @@ from threading import Thread
 import pathlib
 
 # ===== Path cho DB nằm trong repo =====
-BASE_DIR = pathlib.Path(__file__).parent  # thư mục chứa script
-DB_PATH = BASE_DIR / "inactivity.db"      # file DB trong repo
+BASE_DIR = pathlib.Path(__file__).parent
+DB_PATH = BASE_DIR / "inactivity.db"
 
 # ===== Flask server cho Render =====
 app = Flask(__name__)
@@ -42,7 +42,7 @@ conn.commit()
 conn.close()
 print(f"🟢 Database SQLite đã sẵn sàng: {DB_PATH}")
 
-# ===== Bot Discord =====
+# ===== Cấu hình bot =====
 TOKEN = os.getenv("TOKEN")
 ROLE_NAME = "💤 Tín Đồ Ngủ Đông"
 INACTIVE_DAYS = 30
@@ -54,11 +54,15 @@ intents.presences = True
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# ===== Task: check inactivity & gán role =====
-@tasks.loop(hours=24)
-async def check_inactivity():
+# =====================================================
+# 💤 HÀM CHÍNH: Kiểm tra 1 lần duy nhất (dùng cho task & lệnh !runcheck)
+# =====================================================
+async def check_inactivity_once(ctx=None, only_over_30=False):
     now = datetime.now(timezone.utc)
     print(f"🔍 [{now.isoformat()}] Bắt đầu kiểm tra thành viên không hoạt động...")
+    total_checked = 0
+    total_updated = 0
+    total_role_added = 0
 
     for guild in bot.guilds:
         role = discord.utils.get(guild.roles, name=ROLE_NAME)
@@ -77,102 +81,140 @@ async def check_inactivity():
                 c.execute("SELECT last_seen, role_added FROM inactivity WHERE member_id=?", (str(member.id),))
                 row = c.fetchone()
                 last_seen, role_added = (row["last_seen"], row["role_added"]) if row else (None, 0)
+                total_checked += 1
 
-                # Cập nhật last_seen nếu offline
-                if member.activity is None and str(member.status) == "offline":
+                # Cập nhật nếu offline
+                if str(member.status) == "offline":
                     c.execute("""
                         INSERT INTO inactivity (member_id, guild_id, last_seen, role_added)
                         VALUES (?, ?, ?, ?)
                         ON CONFLICT(member_id) DO UPDATE SET last_seen=excluded.last_seen
                     """, (str(member.id), str(guild.id), now, role_added))
                     conn.commit()
-                    last_seen = now
+                    total_updated += 1
                     print(f"🟡 Cập nhật last_seen cho {member.name}")
 
                 # Gán role nếu đủ 30 ngày offline
                 if last_seen:
                     last_seen_dt = datetime.fromisoformat(last_seen) if isinstance(last_seen, str) else last_seen
-                    if (now - last_seen_dt).days >= INACTIVE_DAYS and role_added == 0:
+                    days_offline = (now - last_seen_dt).days
+                    if days_offline >= INACTIVE_DAYS and role_added == 0:
+                        if only_over_30 and days_offline < INACTIVE_DAYS:
+                            continue
                         try:
                             await member.add_roles(role)
                             c.execute("UPDATE inactivity SET role_added=1 WHERE member_id=?", (str(member.id),))
                             conn.commit()
-                            print(f"✅ Gán role '{ROLE_NAME}' cho {member.name}")
+                            total_role_added += 1
+                            print(f"✅ Gán role '{ROLE_NAME}' cho {member.name} ({days_offline} ngày offline)")
                         except discord.Forbidden:
                             print(f"🚫 Không đủ quyền để gán role cho {member.name}")
                         except Exception as e:
                             print(f"⚠️ Lỗi khi gán role cho {member.name}: {e}")
+
             except Exception as e:
                 print(f"⚠️ Lỗi SQLite với {member.name}: {e}")
             finally:
                 conn.close()
 
-    print(f"✅ [{datetime.now(timezone.utc).isoformat()}] Kiểm tra hoàn tất!")
+    print(f"✅ [{datetime.now(timezone.utc).isoformat()}] Hoàn tất kiểm tra!")
+    summary = (
+        f"🧾 **Tổng kết:**\n"
+        f"• Kiểm tra: {total_checked} thành viên\n"
+        f"• Cập nhật: {total_updated}\n"
+        f"• Gán role: {total_role_added}"
+    )
+    if ctx:
+        await ctx.send(summary)
+    else:
+        print(summary)
 
-# ===== Command: test bot =====
+
+# ===== Task định kỳ =====
+@tasks.loop(hours=24)
+async def check_inactivity():
+    await check_inactivity_once()
+
+# =====================================================
+# ⚙️ CÁC LỆNH
+# =====================================================
+
 @bot.command()
 async def test(ctx):
-    print(f"📩 Nhận lệnh !test từ {ctx.author}")
     await ctx.send("✅ Bot đang hoạt động và kiểm tra mỗi 24h 🕓")
 
-# ===== Command: list offline members =====
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def runcheck(ctx):
+    """Chạy kiểm tra inactivity ngay lập tức"""
+    await ctx.send("🔎 Bắt đầu kiểm tra thủ công...")
+    await check_inactivity_once(ctx)
+    await ctx.send("✅ Đã hoàn tất kiểm tra thủ công!")
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def recheck30days(ctx):
+    """Kiểm tra lại những người đã offline đủ 30 ngày trở lên"""
+    await ctx.send("🔁 Đang kiểm tra lại những member đã offline đủ 30 ngày...")
+    await check_inactivity_once(ctx, only_over_30=True)
+    await ctx.send("✅ Hoàn tất kiểm tra lại thành viên offline 30 ngày!")
+
+# ===== Command: list offline members (CÓ hiển thị số ngày offline) =====
 @bot.command()
 async def list_off(ctx):
-    print(f"📩 Nhận lệnh !list_off từ {ctx.author}")
     guild = ctx.guild
     role = discord.utils.get(guild.roles, name=ROLE_NAME)
     if not role:
         await ctx.send(f"⚠️ Không tìm thấy role '{ROLE_NAME}'")
         return
 
-    offline_members = [f"{m.name}#{m.discriminator}" for m in role.members if str(m.status) == "offline"]
-    if offline_members:
-        await ctx.send("📋 **Danh sách member offline với role ngủ đông:**\n" + "\n".join(offline_members))
-    else:
-        await ctx.send("✅ Không có member offline nào với role này.")
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT member_id, last_seen FROM inactivity WHERE guild_id=?", (str(guild.id),))
+    rows = c.fetchall()
+    conn.close()
 
-# ===== Command: remove role =====
+    now = datetime.now(timezone.utc)
+    results = []
+
+    for row in rows:
+        member = guild.get_member(int(row["member_id"]))
+        if not member or member.bot or str(member.status) != "offline":
+            continue
+
+        last_seen = row["last_seen"]
+        if not last_seen:
+            continue
+        last_seen_dt = datetime.fromisoformat(last_seen) if isinstance(last_seen, str) else last_seen
+        days_offline = (now - last_seen_dt).days
+        if days_offline >= 1:
+            results.append(f"• {member.name}#{member.discriminator} — 🕓 {days_offline} ngày offline")
+
+    if results:
+        message = "📋 **Danh sách member offline:**\n" + "\n".join(results)
+    else:
+        message = "✅ Không có member nào đang offline lâu."
+    await ctx.send(message)
+
+
 @bot.command()
 @commands.has_permissions(manage_roles=True)
 async def removerole(ctx, member: discord.Member):
-    print(f"📩 Nhận lệnh !removerole từ {ctx.author} cho {member.name}")
     guild = ctx.guild
     role = discord.utils.get(guild.roles, name=ROLE_NAME)
     if not role:
         await ctx.send(f"⚠️ Không tìm thấy role '{ROLE_NAME}'")
         return
-
-    bot_member = guild.me
-    if role.position >= bot_member.top_role.position:
-        await ctx.send("🚫 Bot không có quyền gỡ role này.")
-        return
-
     try:
         await member.remove_roles(role)
-        await ctx.send(f"✅ Gỡ role '{ROLE_NAME}' cho {member.name}")
         conn = get_db_connection()
         c = conn.cursor()
         c.execute("UPDATE inactivity SET role_added=0 WHERE member_id=?", (str(member.id),))
         conn.commit()
         conn.close()
-        print(f"🟢 Role '{ROLE_NAME}' đã được gỡ khỏi {member.name}")
-    except discord.Forbidden:
-        await ctx.send("🚫 Bot không có quyền để gỡ role.")
+        await ctx.send(f"✅ Gỡ role '{ROLE_NAME}' cho {member.name}")
     except Exception as e:
         await ctx.send(f"⚠️ Lỗi: {e}")
-        print(f"⚠️ Lỗi gỡ role cho {member.name}: {e}")
-
-# ===== Command: Check inacvity =====
-@bot.command()
-@commands.has_permissions(administrator=True)
-async def runcheck(ctx):
-    """Chạy kiểm tra inactivity ngay lập tức"""
-    if check_inactivity.is_running():
-        await ctx.send("⚠️ Task check_inactivity đang chạy, vui lòng đợi.")
-        return
-    await ctx.send("⏳ Bắt đầu kiểm tra inactivity ngay lập tức...")
-    await check_inactivity()
-    await ctx.send("✅ Hoàn tất kiểm tra inactivity!")
 
 # ===== Event: bot ready =====
 @bot.event
@@ -182,13 +224,10 @@ async def on_ready():
     if not check_inactivity.is_running():
         check_inactivity.start()
         print("🟢 Task check_inactivity đã được start")
-    else:
-        print("ℹ️ Task check_inactivity đã chạy trước đó, không start lại")
-        
+
 # ===== Run bot =====
 if TOKEN:
     print("🟢 Bắt đầu chạy bot...")
     bot.run(TOKEN)
 else:
     print("❌ Không tìm thấy TOKEN trong biến môi trường!")
-
