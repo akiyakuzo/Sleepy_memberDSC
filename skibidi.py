@@ -159,6 +159,15 @@ async def recheck30days(ctx):
     await check_inactivity_once(ctx, only_over_30=True)
     await ctx.send("✅ Hoàn tất kiểm tra lại thành viên offline 30 ngày!")
 
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def exportdb(ctx):
+    """Gửi file inactivity.db lên kênh Discord"""
+    if os.path.exists(DB_PATH):
+        await ctx.send(file=discord.File(DB_PATH))
+    else:
+        await ctx.send("❌ Không tìm thấy file database.")
+
 # ===== Command: list offline members (CÓ hiển thị số ngày offline) =====
 @bot.command()
 async def list_off(ctx):
@@ -231,3 +240,4 @@ if TOKEN:
     bot.run(TOKEN)
 else:
     print("❌ Không tìm thấy TOKEN trong biến môi trường!")
+
