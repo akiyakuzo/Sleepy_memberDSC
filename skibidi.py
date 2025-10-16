@@ -15,7 +15,18 @@ import asyncio
 BASE_DIR = pathlib.Path(__file__).parent
 DB_PATH = BASE_DIR / "inactivity.db"
 
-# ===== Flask server cho Render (keep-alive) =====
+# ===== KHỞI TẠO BOT =====
+TOKEN = os.getenv("TOKEN")
+
+intents = discord.Intents.default()
+intents.messages = True
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+@bot.event
+async def on_ready():
+    print(f"✅ Đăng nhập thành công: {bot.user}")
+
+# ===== FLASK SERVER =====
 app = Flask(__name__)
 
 @app.route("/")
@@ -27,15 +38,15 @@ def run_flask():
     serve(app, host="0.0.0.0", port=port, _quiet=True)
 
 if __name__ == "__main__":
-    # Ngăn chạy 2 lần khi Render hoặc IDE reload
-    if not os.environ.get("FLASK_RUN_FROM_CLI"):
+    # Tránh Flask tự reload -> chạy 2 lần
+    if not os.environ.get("WERKZEUG_RUN_MAIN"):
         Thread(target=run_flask, daemon=True).start()
         print("🟢 Flask server đã chạy qua waitress (daemon thread).")
 
-    # Đảm bảo bot chỉ chạy 1 instance (Render đôi khi spawn 2 worker)
-    if os.environ.get("RENDER") != "secondary":
-        print("🟢 Bắt đầu chạy bot...")
-        bot.run(TOKEN)
+        # Render chỉ chạy 1 instance (đánh dấu bằng biến môi trường)
+        if os.environ.get("INSTANCE_ROLE", "primary") == "primary":
+            print("🟢 Bắt đầu chạy bot...")
+            bot.run(TOKEN)
 
 # ===== Hàm tạo kết nối DB thread-safe =====
 def get_db_connection():
@@ -402,5 +413,6 @@ if TOKEN:
     bot.run(TOKEN)
 else:
     print("❌ Không tìm thấy TOKEN trong biến môi trường!")
+
 
 
