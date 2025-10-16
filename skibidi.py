@@ -11,7 +11,7 @@ import pathlib
 import csv
 import asyncio
 
-# ===== Path cho DB nằm trong repo =====
+# ===== Path cho DB =====
 BASE_DIR = pathlib.Path(__file__).parent
 DB_PATH = BASE_DIR / "inactivity.db"
 
@@ -67,7 +67,7 @@ with get_db_connection() as conn:
     """)
 print(f"🟢 Database SQLite đã sẵn sàng: {DB_PATH}")
 
-# ===== Cấu hình bot (có thể lấy ROLE_NAME, INACTIVE_DAYS từ env nếu muốn) =====
+# ===== KHỞI TẠO BOT =====
 TOKEN = os.getenv("TOKEN")
 ROLE_NAME = os.getenv("ROLE_NAME", "💤 Tín Đồ Ngủ Đông")
 INACTIVE_DAYS = int(os.getenv("INACTIVE_DAYS", "30"))
@@ -413,6 +413,7 @@ if TOKEN:
     bot.run(TOKEN)
 else:
     print("❌ Không tìm thấy TOKEN trong biến môi trường!")
+
 
 
 
