@@ -151,7 +151,7 @@ class FancyHelpCommand(commands.MinimalHelpCommand):
         )
 
         # Thumbnail (logo góc phải)
-        embed.set_thumbnail(url="https://cdn.discordapp.com/emojis/123456789012345678.webp?size=96&quality=lossless")
+        embed.set_thumbnail(url="https://cdn.discordapp.com/attachments/1424075941268951070/1428267008973340774/wallpae.png?ex=68f1e0ce&is=68f08f4e&hm=e0fe822bd5dace59aa272fe3756d7de08fa756db20fa6da6690658ec393fba0e&")
 
         # Banner hoặc GIF nền (ở dưới cùng embed)
         embed.set_image(url="https://moewalls.com/wp-content/uploads/2025/03/phoebe-sleeping-wuthering-waves-thumb.jpg")
@@ -183,7 +183,10 @@ class FancyHelpCommand(commands.MinimalHelpCommand):
         embed.add_field(name="📦 Cú pháp", value=f"`!{command.name} {command.signature}`", inline=False)
         await self.get_destination().send(embed=embed)
 
-# Gán lại help command mặc định
+# 🚫 Xóa help mặc định, tránh trùng lặp
+bot.remove_command("help")
+
+# ✅ Gán help mới
 bot.help_command = FancyHelpCommand()
 
 @bot.command()
@@ -321,6 +324,7 @@ if TOKEN:
     bot.run(TOKEN)
 else:
     print("❌ Không tìm thấy TOKEN trong biến môi trường!")
+
 
 
 
