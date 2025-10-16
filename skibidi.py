@@ -24,10 +24,11 @@ def home():
 
 def run_flask():
     port = int(os.environ.get("PORT", 8080))
-    serve(app, host="0.0.0.0", port=port)
+    serve(app, host="0.0.0.0", port=port, _quiet=True)
 
-Thread(target=run_flask, daemon=True).start()
-print("🟢 Flask server đã chạy qua waitress (daemon thread).")
+if __name__ == "__main__":
+    Thread(target=run_flask, daemon=True).start()
+    print("🟢 Flask server đã chạy qua waitress (daemon thread).")
 
 # ===== Hàm tạo kết nối DB thread-safe =====
 def get_db_connection():
@@ -394,3 +395,4 @@ if TOKEN:
     bot.run(TOKEN)
 else:
     print("❌ Không tìm thấy TOKEN trong biến môi trường!")
+
