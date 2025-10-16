@@ -182,6 +182,107 @@ async def check_inactivity():
 
 # ===== Commands =====
 @bot.command()
+@commands.has_permissions(administrator=True)
+async def exportcsv(ctx):
+    """Xuất database inactivity thành file CSV có tên người dùng"""
+    csv_path = BASE_DIR / "inactivity_export.csv"
+
+    if not os.path.exists(DB_PATH):
+        await ctx.send("❌ Không tìm thấy file database.")
+        return
+
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT member_id, guild_id, last_seen, role_added FROM inactivity")
+    rows = c.fetchall()
+    conn.close()
+
+    if not rows:
+        await ctx.send("⚠️ Database trống, không có dữ liệu để xuất.")
+        return
+
+    # Ghi file CSV kèm tên user
+    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["member_id", "member_name", "guild_id", "last_seen", "role_added"])
+        for row in rows:
+            guild = bot.get_guild(int(row["guild_id"]))
+            member = guild.get_member(int(row["member_id"])) if guild else None
+            member_name = f"{member.name}#{member.discriminator}" if member else "Không tìm thấy"
+            writer.writerow([row["member_id"], member_name, row["guild_id"], row["last_seen"], row["role_added"]])
+
+    # Gửi file mà không cần sleep
+    with open(csv_path, "rb") as f:
+        await ctx.send("✅ Đã xuất file CSV có tên người dùng:", file=discord.File(f, filename="inactivity_export.csv"))
+
+    # Xóa file sau khi gửi
+    os.remove(csv_path)
+
+@bot.command()
+@commands.has_permissions(manage_roles=True)
+async def removerole(ctx, member: discord.Member):
+    guild = ctx.guild
+    role = discord.utils.get(guild.roles, name=ROLE_NAME)
+    if not role:
+        await ctx.send(f"⚠️ Không tìm thấy role '{ROLE_NAME}'")
+        return
+    try:
+        await member.remove_roles(role)
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute("UPDATE inactivity SET role_added=0 WHERE member_id=?", (str(member.id),))
+        conn.commit()
+        conn.close()
+        await ctx.send(f"✅ Gỡ role '{ROLE_NAME}' cho {member.name}")
+    except Exception as e:
+        await ctx.send(f"⚠️ Lỗi: {e}")
+
+@bot.command()
+async def list_off(ctx):
+    guild = ctx.guild
+    role = discord.utils.get(guild.roles, name=ROLE_NAME)
+    if not role:
+        await ctx.send(f"⚠️ Không tìm thấy role '{ROLE_NAME}'")
+        return
+
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT member_id, last_seen FROM inactivity WHERE guild_id=?", (str(guild.id),))
+    rows = c.fetchall()
+    conn.close()
+
+    now = datetime.now(timezone.utc)
+    results = []
+
+    for row in rows:
+        member = guild.get_member(int(row["member_id"]))
+        if not member or member.bot or str(member.status) != "offline":
+            continue
+
+        last_seen = row["last_seen"]
+        if not last_seen:
+            continue
+        last_seen_dt = datetime.fromisoformat(last_seen) if isinstance(last_seen, str) else last_seen
+        days_offline = (now - last_seen_dt).days
+        if days_offline >= 1:
+            results.append(f"• {member.name}#{member.discriminator} — 🕓 {days_offline} ngày offline")
+
+    if results:
+        message = "📋 **Danh sách member offline:**\n" + "\n".join(results)
+    else:
+        message = "✅ Không có member nào đang offline lâu."
+    await ctx.send(message)
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def exportdb(ctx):
+    """Gửi file inactivity.db lên kênh Discord"""
+    if os.path.exists(DB_PATH):
+        await ctx.send(file=discord.File(DB_PATH))
+    else:
+        await ctx.send("❌ Không tìm thấy file database.")
+
+@bot.command()
 async def test(ctx):
     embed = make_embed(
         title="🧪 Bot Test",
@@ -209,6 +310,98 @@ async def recheck30days(ctx):
     await check_inactivity_once(ctx, only_over_30=True)
     await ctx.send(embed=make_embed(title="✅ Hoàn tất kiểm tra lại", color=discord.Color.green()))
 
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def list_off_30days(ctx, export: str = None):
+    """
+    Liệt kê member offline >= INACTIVE_DAYS (mặc định 30).
+    Usage:
+      !list_off_30days        -> gửi embed (phân trang nếu >25)
+      !list_off_30days csv    -> xuất file CSV và gửi
+    """
+    guild = ctx.guild
+    if not guild:
+        await ctx.send("❌ Lệnh chỉ dùng trong server.")
+        return
+
+    # lấy dữ liệu từ DB
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT member_id, last_seen FROM inactivity WHERE guild_id=?", (str(guild.id),))
+    rows = c.fetchall()
+    conn.close()
+
+    if not rows:
+        await ctx.send("✅ Database trống cho server này.")
+        return
+
+    now = datetime.now(timezone.utc)
+    threshold = INACTIVE_DAYS  # mặc định từ config
+    results = []
+
+    for row in rows:
+        try:
+            member_id = int(row["member_id"])
+        except Exception:
+            continue
+        last_seen = row["last_seen"]
+        if not last_seen:
+            continue
+        try:
+            last_seen_dt = datetime.fromisoformat(last_seen) if isinstance(last_seen, str) else last_seen
+        except Exception:
+            continue
+        days_offline = (now - last_seen_dt).days
+        if days_offline >= threshold:
+            member = guild.get_member(member_id)
+            results.append((member, days_offline, last_seen, member_id))
+
+    if not results:
+        await ctx.send(f"✅ Không có member nào offline ≥ {threshold} ngày.")
+        return
+
+    # Nếu user yêu cầu xuất CSV
+    if export and export.lower() in ("csv", "file"):
+        csv_path = BASE_DIR / f"offline_{guild.id}_{threshold}d.csv"
+        try:
+            with open(csv_path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(["member_id", "member_name", "days_offline", "last_seen"])
+                for member, days_offline, last_seen, member_id in results:
+                    member_name = f"{member.name}#{member.discriminator}" if member else "Không tìm thấy"
+                    writer.writerow([member_id, member_name, days_offline, last_seen])
+            # gửi file
+            with open(csv_path, "rb") as f:
+                await ctx.send(f"📥 Danh sách member offline ≥ {threshold} ngày (CSV):", file=discord.File(f, filename=csv_path.name))
+        except Exception as e:
+            await ctx.send(f"⚠️ Lỗi khi xuất CSV: {e}")
+        finally:
+            try:
+                if os.path.exists(csv_path):
+                    os.remove(csv_path)
+            except:
+                pass
+        return
+
+    # Chuẩn bị message embed phân trang (25 mục/ embed)
+    per_page = 25
+    chunks = [results[i:i+per_page] for i in range(0, len(results), per_page)]
+    for page_idx, chunk in enumerate(chunks, start=1):
+        lines = []
+        for member, days_offline, last_seen, member_id in chunk:
+            if member:
+                name = f"{member.mention} ({member.name}#{member.discriminator})"
+            else:
+                name = f"ID:{member_id} — Không tìm thấy"
+            lines.append(f"• {name} — 🕓 {days_offline} ngày (last_seen: `{last_seen}`)")
+        embed = make_embed(
+            title=f"📋 Danh sách offline ≥ {threshold} ngày — Trang {page_idx}/{len(chunks)}",
+            description="\n".join(lines[:2000]),
+            color=discord.Color.gold()
+        )
+        embed.set_footer(text=f"Tổng: {len(results)} member")
+        await ctx.send(embed=embed)
+
 # ===== Event on_ready =====
 @bot.event
 async def on_ready():
@@ -227,3 +420,4 @@ if __name__ == "__main__":
         bot.run(TOKEN)
     else:
         print("❌ Không tìm thấy TOKEN trong biến môi trường!")
+
