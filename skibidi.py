@@ -141,6 +141,45 @@ async def check_inactivity():
 # ⚙️ CÁC LỆNH
 # =====================================================
 
+# ===== Custom Help Command Đẹp Mắt =====
+class FancyHelpCommand(commands.MinimalHelpCommand):
+    async def send_bot_help(self, mapping):
+        embed = discord.Embed(
+            title="📘 Hướng dẫn sử dụng Bot",
+            description="Dưới đây là danh sách các lệnh khả dụng, chia theo nhóm:",
+            color=discord.Color.blue()
+        )
+
+        for cog, commands_list in mapping.items():
+            filtered = await self.filter_commands(commands_list, sort=True)
+            if not filtered:
+                continue
+
+            command_descriptions = [
+                f"**!{cmd.name}** — {cmd.help or 'Không có mô tả'}"
+                for cmd in filtered
+            ]
+            embed.add_field(
+                name=f"⚙️ {cog.qualified_name if cog else 'Lệnh chung'}",
+                value="\n".join(command_descriptions),
+                inline=False
+            )
+
+        embed.set_footer(text="💡 Dùng !help <tên lệnh> để xem chi tiết cụ thể.")
+        await self.get_destination().send(embed=embed)
+
+    async def send_command_help(self, command):
+        embed = discord.Embed(
+            title=f"❔ Chi tiết lệnh: !{command.name}",
+            color=discord.Color.green()
+        )
+        embed.add_field(name="📄 Mô tả", value=command.help or "Không có mô tả", inline=False)
+        embed.add_field(name="📦 Cú pháp", value=f"`!{command.name} {command.signature}`", inline=False)
+        await self.get_destination().send(embed=embed)
+
+# Gán lại help command mặc định
+bot.help_command = FancyHelpCommand()
+
 @bot.command()
 async def test(ctx):
     await ctx.send("✅ Bot đang hoạt động và kiểm tra mỗi 24h 🕓")
