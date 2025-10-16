@@ -140,53 +140,51 @@ async def check_inactivity():
 # =====================================================
 # ⚙️ CÁC LỆNH
 # =====================================================
-
-# ===== Custom Help Command Đẹp Mắt =====
 class FancyHelpCommand(commands.MinimalHelpCommand):
-    async def send_bot_help(self, mapping):
-        embed = discord.Embed(
-            title="📘 Hướng dẫn sử dụng Bot",
-            description="Dưới đây là danh sách các lệnh khả dụng, chia theo nhóm:",
-            color=discord.Color.blue()
-        )
+async def send_bot_help(self, mapping):
+    embed = discord.Embed(
+        title="📘 Hướng dẫn sử dụng Bot",
+        description="Dưới đây là danh sách các lệnh khả dụng, chia theo nhóm:",
+        color=discord.Color.blue()
+    )
 
-        # Thumbnail (logo góc phải)
-        embed.set_thumbnail(url="https://cdn.discordapp.com/attachments/1424075941268951070/1428267008973340774/wallpae.png?ex=68f1e0ce&is=68f08f4e&hm=e0fe822bd5dace59aa272fe3756d7de08fa756db20fa6da6690658ec393fba0e&")
+    # Thumbnail (logo góc phải)
+    bot_avatar = self.context.bot.user.avatar.url if self.context.bot.user.avatar else None
+    embed.set_thumbnail(url=bot_avatar or "https://files.catbox.moe/rvvejl.png")
 
-        # Banner hoặc GIF nền (ở dưới cùng embed)
-        embed.set_image(url="https://moewalls.com/wp-content/uploads/2025/03/phoebe-sleeping-wuthering-waves-thumb.jpg")
+    # Banner hoặc GIF nền (ở dưới cùng embed)
+    embed.set_image(url="https://moewalls.com/wp-content/uploads/2025/03/phoebe-sleeping-wuthering-waves-thumb.jpg")
 
-        for cog, commands_list in mapping.items():
-            filtered = await self.filter_commands(commands_list, sort=True)
-            if not filtered:
-                continue
+    # Hiển thị danh sách lệnh theo nhóm
+    for cog, commands_list in mapping.items():
+        filtered = await self.filter_commands(commands_list, sort=True)
+        if not filtered:
+            continue
 
-            command_descriptions = [
+        embed.add_field(
+            name=f"⚙️ {cog.qualified_name if cog else 'Lệnh chung'}",
+            value="\n".join(
                 f"**!{cmd.name}** — {cmd.help or 'Không có mô tả'}"
                 for cmd in filtered
-            ]
-            embed.add_field(
-                name=f"⚙️ {cog.qualified_name if cog else 'Lệnh chung'}",
-                value="\n".join(command_descriptions),
-                inline=False
-            )
-
-        embed.set_footer(text="💡 Dùng !help <tên lệnh> để xem chi tiết cụ thể.")
-        await self.get_destination().send(embed=embed)
-
-    async def send_command_help(self, command):
-        embed = discord.Embed(
-            title=f"❔ Chi tiết lệnh: !{command.name}",
-            color=discord.Color.green()
+            ),
+            inline=False
         )
-        embed.add_field(name="📄 Mô tả", value=command.help or "Không có mô tả", inline=False)
-        embed.add_field(name="📦 Cú pháp", value=f"`!{command.name} {command.signature}`", inline=False)
-        await self.get_destination().send(embed=embed)
 
-# 🚫 Xóa help mặc định, tránh trùng lặp
+    embed.set_footer(text="💡 Dùng !help <tên lệnh> để xem chi tiết cụ thể.")
+    await self.get_destination().send(embed=embed)
+
+async def send_command_help(self, command):
+    embed = discord.Embed(
+        title=f"❔ Chi tiết lệnh: !{command.name}",
+        color=discord.Color.green()
+    )
+    embed.add_field(name="📄 Mô tả", value=command.help or "Không có mô tả", inline=False)
+    embed.add_field(name="📦 Cú pháp", value=f"`!{command.name} {command.signature}`", inline=False)
+    await self.get_destination().send(embed=embed)
+
+
+# Xóa help mặc định & gán help mới
 bot.remove_command("help")
-
-# ✅ Gán help mới
 bot.help_command = FancyHelpCommand()
 
 @bot.command()
@@ -324,6 +322,7 @@ if TOKEN:
     bot.run(TOKEN)
 else:
     print("❌ Không tìm thấy TOKEN trong biến môi trường!")
+
 
 
 
