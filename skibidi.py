@@ -150,6 +150,12 @@ class FancyHelpCommand(commands.MinimalHelpCommand):
             color=discord.Color.blue()
         )
 
+        # Thumbnail (logo góc phải)
+        embed.set_thumbnail(url="https://cdn.discordapp.com/emojis/123456789012345678.webp?size=96&quality=lossless")
+
+        # Banner hoặc GIF nền (ở dưới cùng embed)
+        embed.set_image(url="https://moewalls.com/wp-content/uploads/2025/03/phoebe-sleeping-wuthering-waves-thumb.jpg")
+
         for cog, commands_list in mapping.items():
             filtered = await self.filter_commands(commands_list, sort=True)
             if not filtered:
@@ -315,5 +321,6 @@ if TOKEN:
     bot.run(TOKEN)
 else:
     print("❌ Không tìm thấy TOKEN trong biến môi trường!")
+
 
 
