@@ -2,7 +2,7 @@
 # 🧠 Skibidi Bot V3 — Sổ tay bảo trì nội bộ (Private)
 
 > Phiên bản: `v3_full_embed_v2style`  
-> Dev: **Khải Trần**  
+> Dev: **Kiyaaaa**  
 > Mục tiêu: Ổn định – Nhẹ – Miễn phí – Không vòng lặp Render
 
 ---
