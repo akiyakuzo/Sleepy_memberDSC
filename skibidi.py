@@ -76,20 +76,36 @@ def make_embed(title: str, description: str = None, color=discord.Color.blurple(
 # ===== Lưu ID embed cuối mỗi channel =====
 last_command_msg_id = {}
 
+# ===== Auto-delete embed (có delay để tránh spam Render) =====
+delete_timers = {}
+
 @bot.event
 async def on_message(message: discord.Message):
-    """Xóa embed cũ nếu có ai nhắn trong channel đó."""
+    """Tự động xóa embed sau 3 giây nếu có người gửi tin nhắn mới."""
     if message.author.bot:
         return
+
     if message.channel.id in last_command_msg_id:
-        try:
-            old_id = last_command_msg_id.pop(message.channel.id)
-            old = await message.channel.fetch_message(old_id)
-            await old.delete()
-        except discord.NotFound:
-            pass
-        except Exception as e:
-            print(f"⚠️ Lỗi khi xóa embed cũ: {e}")
+        # Nếu đã có timer trước -> hủy (debounce)
+        if message.channel.id in delete_timers:
+            delete_timers[message.channel.id].cancel()
+
+        async def delayed_delete(channel_id):
+            await asyncio.sleep(3)  # Đợi 3 giây để giảm tải Render & tránh rate limit
+            try:
+                old_msg_id = last_command_msg_id.pop(channel_id, None)
+                if old_msg_id:
+                    old_msg = await message.channel.fetch_message(old_msg_id)
+                    await old_msg.delete()
+                    print(f"🗑️ Đã xóa embed cũ ở #{message.channel.name}")
+            except discord.NotFound:
+                pass
+            except Exception as e:
+                print(f"⚠️ Lỗi khi xóa embed trễ: {e}")
+
+        # Tạo task bất đồng bộ và lưu lại
+        task = asyncio.create_task(delayed_delete(message.channel.id))
+        delete_timers[message.channel.id] = task
 
 # ===== Inactivity logic =====
 async def check_inactivity_once(interaction: discord.Interaction = None, only_over_30=False):
@@ -223,3 +239,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
