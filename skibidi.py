@@ -107,7 +107,7 @@ async def on_message(message: discord.Message):
         task = asyncio.create_task(delayed_delete(message.channel.id))
         delete_timers[message.channel.id] = task
 
-# ===== Inactivity logic =====
+# ===== Inactivity logic (cập nhật full trạng thái) =====
 async def check_inactivity_once(interaction: discord.Interaction = None, only_over_30=False):
     now = datetime.now(timezone.utc)
     total_checked = total_updated = total_role_added = 0
@@ -122,16 +122,21 @@ async def check_inactivity_once(interaction: discord.Interaction = None, only_ov
             if member.bot:
                 continue
             total_checked += 1
+
+            # Lấy dữ liệu từ DB
             c.execute("SELECT last_seen, role_added FROM inactivity WHERE member_id=?", (str(member.id),))
             row = c.fetchone()
             last_seen, role_added = (row["last_seen"], row["role_added"]) if row else (None, 0)
-            if str(member.status) == "offline":
-                c.execute("""
-                    INSERT INTO inactivity (member_id, guild_id, last_seen, role_added)
-                    VALUES (?, ?, ?, ?)
-                    ON CONFLICT(member_id) DO UPDATE SET last_seen=excluded.last_seen
-                """, (str(member.id), str(guild.id), now.isoformat(), role_added))
-                total_updated += 1
+
+            # Cập nhật last_seen mọi trạng thái
+            c.execute("""
+                INSERT INTO inactivity (member_id, guild_id, last_seen, role_added)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(member_id) DO UPDATE SET last_seen=excluded.last_seen
+            """, (str(member.id), str(guild.id), now.isoformat(), role_added))
+            total_updated += 1
+
+            # Nếu offline và đã đủ INACTIVE_DAYS thì gán role
             if last_seen:
                 days = (now - datetime.fromisoformat(last_seen)).days
                 if days >= INACTIVE_DAYS and role_added == 0:
@@ -142,11 +147,15 @@ async def check_inactivity_once(interaction: discord.Interaction = None, only_ov
                             total_role_added += 1
                         except Exception as e:
                             print(f"⚠️ Lỗi gán role cho {member}: {e}")
+
+            # Sleep nhẹ để tránh block event loop
             if total_checked % 100 == 0:
                 await asyncio.sleep(0.1)
+
     conn.commit()
     conn.close()
 
+    # Gửi embed báo cáo nếu có interaction
     if interaction:
         embed = make_embed(
             "✅ Hoàn tất kiểm tra Inactivity",
@@ -161,6 +170,7 @@ async def check_inactivity_once(interaction: discord.Interaction = None, only_ov
         sent = await interaction.followup.send(embed=embed)
         last_command_msg_id[interaction.channel_id] = sent.id
 
+# ===== Task định kỳ =====
 @tasks.loop(hours=24)
 async def check_inactivity_task():
     try:
@@ -215,14 +225,50 @@ async def slash_recheck30days(interaction: discord.Interaction):
 @tree.command(name="list_off", description="Liệt kê các thành viên offline ≥1 ngày.")
 async def slash_list_off(interaction: discord.Interaction):
     await interaction.response.defer()
-    embed = make_embed("📋 Danh sách Offline", "Đây là nơi bạn sẽ xử lý logic list_off.")
+    conn = get_db_connection()
+    c = conn.cursor()
+    now = datetime.now(timezone.utc)
+    lines = []
+
+    for guild in bot.guilds:
+        role = discord.utils.get(guild.roles, name=ROLE_NAME)
+        c.execute("SELECT member_id, last_seen FROM inactivity WHERE guild_id=?", (str(guild.id),))
+        for member_id, last_seen in c.fetchall():
+            member = guild.get_member(int(member_id))
+            if not member:
+                continue
+            days = (now - datetime.fromisoformat(last_seen)).days
+            if days >= 1:
+                lines.append(f"{member.display_name} – offline {days} ngày")
+
+    conn.close()
+    desc = "\n".join(lines) if lines else "Không có thành viên offline ≥1 ngày."
+    embed = make_embed("📋 Danh sách Offline ≥1 ngày", desc)
     sent = await interaction.followup.send(embed=embed)
     last_command_msg_id[interaction.channel_id] = sent.id
 
 @tree.command(name="list_off_30days", description="Liệt kê các thành viên offline ≥30 ngày.")
 async def slash_list_off_30days(interaction: discord.Interaction):
     await interaction.response.defer()
-    embed = make_embed("📋 Offline ≥30 ngày", "Thêm logic lọc người ≥30 ngày vào đây.")
+    conn = get_db_connection()
+    c = conn.cursor()
+    now = datetime.now(timezone.utc)
+    lines = []
+
+    for guild in bot.guilds:
+        role = discord.utils.get(guild.roles, name=ROLE_NAME)
+        c.execute("SELECT member_id, last_seen FROM inactivity WHERE guild_id=?", (str(guild.id),))
+        for member_id, last_seen in c.fetchall():
+            member = guild.get_member(int(member_id))
+            if not member:
+                continue
+            days = (now - datetime.fromisoformat(last_seen)).days
+            if days >= 30:
+                lines.append(f"{member.display_name} – offline {days} ngày")
+
+    conn.close()
+    desc = "\n".join(lines) if lines else "Không có thành viên offline ≥30 ngày."
+    embed = make_embed("📋 Danh sách Offline ≥30 ngày", desc, color=discord.Color.orange())
     sent = await interaction.followup.send(embed=embed)
     last_command_msg_id[interaction.channel_id] = sent.id
 
@@ -241,9 +287,49 @@ async def slash_exportdb(interaction: discord.Interaction):
 @app_commands.checks.has_permissions(administrator=True)
 async def slash_exportcsv(interaction: discord.Interaction):
     await interaction.response.defer()
-    embed = make_embed("📤 Xuất CSV", "Tại đây bạn có thể thêm logic ghi file CSV và gửi lên.")
-    sent = await interaction.followup.send(embed=embed)
-    last_command_msg_id[interaction.channel_id] = sent.id
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT member_id, guild_id, last_seen, role_added FROM inactivity")
+    rows = c.fetchall()
+    conn.close()
+
+    if not rows:
+        embed = make_embed("❌ Xuất CSV", "Database rỗng, không có dữ liệu để xuất.")
+        sent = await interaction.followup.send(embed=embed)
+        last_command_msg_id[interaction.channel_id] = sent.id
+        return
+
+    # Tạo file CSV tạm thời
+    csv_file_path = BASE_DIR / f"inactivity_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    with open(csv_file_path, mode="w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        # Header
+        writer.writerow(["Guild_ID", "Member_ID", "Member_Name", "Last_Seen", "Role_Added"])
+        # Dữ liệu
+        for member_id, guild_id, last_seen, role_added in rows:
+            guild = bot.get_guild(int(guild_id))
+            member_name = "Unknown"
+            if guild:
+                member = guild.get_member(int(member_id))
+                if member:
+                    member_name = member.display_name
+            writer.writerow([guild_id, member_id, member_name, last_seen, role_added])
+
+    # Gửi file lên Discord
+    try:
+        await interaction.followup.send(file=discord.File(csv_file_path))
+    except Exception as e:
+        embed = make_embed("❌ Lỗi", f"Không thể gửi file CSV: {e}")
+        await interaction.followup.send(embed=embed)
+
+    # Lưu ID message để auto-delete
+    last_command_msg_id[interaction.channel_id] = (await interaction.original_response()).id
+
+    # Xóa file CSV tạm thời sau khi gửi
+    try:
+        os.remove(csv_file_path)
+    except Exception as e:
+        print(f"⚠️ Không thể xóa file CSV tạm: {e}")
 
 @tree.command(name="help", description="Hiển thị danh sách lệnh của Skibidi Bot.")
 async def slash_help(interaction: discord.Interaction):
@@ -293,5 +379,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-
