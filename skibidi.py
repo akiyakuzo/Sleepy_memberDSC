@@ -331,25 +331,65 @@ async def slash_exportcsv(interaction: discord.Interaction):
     except Exception as e:
         print(f"⚠️ Không thể xóa file CSV tạm: {e}")
 
-@tree.command(name="help", description="Hiển thị danh sách lệnh của Skibidi Bot.")
+from discord.ui import View, Button
+
+# ===== /help paginate =====
+@tree.command(name="help", description="Hiển thị danh sách lệnh của Skibidi Bot (tương tác paginate).")
 async def slash_help(interaction: discord.Interaction):
-    await interaction.response.defer()
-    embed = make_embed(
-        title="📖 Danh sách lệnh Skibidi Bot",
-        desc="Các lệnh hiện có:\n"
-             "• `/test` – Kiểm tra bot hoạt động.\n"
-             "• `/ping` – Xem độ trễ.\n"
-             "• `/config_info` – Thông tin cấu hình.\n"
-             "• `/runcheck` – Kiểm tra inactivity thủ công.\n"
-             "• `/recheck30days` – Kiểm tra lại người offline ≥30 ngày.\n"
-             "• `/list_off` – Danh sách offline ≥1 ngày.\n"
-             "• `/list_off_30days` – Danh sách offline ≥30 ngày.\n"
-             "• `/exportdb` – Xuất database.\n"
-             "• `/exportcsv` – Xuất file CSV.",
-        color=discord.Color.purple()
-    )
-    embed.set_footer(text="Skibidi Bot v6 • Phoebe Style 💜")
-    sent = await interaction.followup.send(embed=embed)
+    await interaction.response.defer(ephemeral=True)
+    
+    # Danh sách lệnh
+    commands_list = [
+        ("/test", "Kiểm tra bot hoạt động"),
+        ("/ping", "Xem độ trễ"),
+        ("/config_info", "Thông tin cấu hình"),
+        ("/runcheck", "Kiểm tra inactivity thủ công"),
+        ("/recheck30days", "Kiểm tra lại người offline ≥30 ngày"),
+        ("/list_off", "Danh sách offline ≥1 ngày"),
+        ("/list_off_30days", "Danh sách offline ≥30 ngày"),
+        ("/exportdb", "Xuất database"),
+        ("/exportcsv", "Xuất file CSV"),
+    ]
+
+    # Cấu hình paginate: mỗi page 4 lệnh
+    PAGE_SIZE = 4
+    pages = [commands_list[i:i+PAGE_SIZE] for i in range(0, len(commands_list), PAGE_SIZE)]
+    total_pages = len(pages)
+    current_page = 0
+
+    def make_help_embed(page_idx):
+        embed = make_embed(
+            title=f"📖 Danh sách lệnh Skibidi Bot (Page {page_idx+1}/{total_pages})",
+            color=discord.Color.purple()
+        )
+        for name, desc in pages[page_idx]:
+            embed.add_field(name=name, value=desc, inline=False)
+        embed.set_footer(text="Skibidi Bot v6 • Phoebe Style 💜")
+        return embed
+
+    # View với nút Back/Next
+    class HelpView(View):
+        def __init__(self):
+            super().__init__(timeout=60)  # 60s tự hết hạn
+            self.current_page = 0
+
+        async def update_message(self, interaction):
+            await interaction.message.edit(embed=make_help_embed(self.current_page), view=self)
+
+        @discord.ui.button(label="⬅ Back", style=discord.ButtonStyle.gray)
+        async def back_button(self, button: Button, interaction: discord.Interaction):
+            if self.current_page > 0:
+                self.current_page -= 1
+                await self.update_message(interaction)
+
+        @discord.ui.button(label="Next ➡", style=discord.ButtonStyle.gray)
+        async def next_button(self, button: Button, interaction: discord.Interaction):
+            if self.current_page < total_pages - 1:
+                self.current_page += 1
+                await self.update_message(interaction)
+
+    view = HelpView()
+    sent = await interaction.followup.send(embed=make_help_embed(current_page), view=view)
     last_command_msg_id[interaction.channel_id] = sent.id
 
 # ===== Bot Events =====
@@ -379,3 +419,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
