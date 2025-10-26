@@ -212,6 +212,60 @@ async def slash_recheck30days(interaction: discord.Interaction):
     await interaction.response.defer()
     await check_inactivity_once(interaction, only_over_30=True)
 
+@tree.command(name="list_off", description="Liệt kê các thành viên offline ≥1 ngày.")
+async def slash_list_off(interaction: discord.Interaction):
+    await interaction.response.defer()
+    embed = make_embed("📋 Danh sách Offline", "Đây là nơi bạn sẽ xử lý logic list_off.")
+    sent = await interaction.followup.send(embed=embed)
+    last_command_msg_id[interaction.channel_id] = sent.id
+
+@tree.command(name="list_off_30days", description="Liệt kê các thành viên offline ≥30 ngày.")
+async def slash_list_off_30days(interaction: discord.Interaction):
+    await interaction.response.defer()
+    embed = make_embed("📋 Offline ≥30 ngày", "Thêm logic lọc người ≥30 ngày vào đây.")
+    sent = await interaction.followup.send(embed=embed)
+    last_command_msg_id[interaction.channel_id] = sent.id
+
+@tree.command(name="exportdb", description="Xuất file database SQLite (.db)")
+@app_commands.checks.has_permissions(administrator=True)
+async def slash_exportdb(interaction: discord.Interaction):
+    await interaction.response.defer()
+    if os.path.exists(DB_PATH):
+        await interaction.followup.send(file=discord.File(DB_PATH))
+    else:
+        embed = make_embed("❌ Lỗi", "Không tìm thấy file database.")
+        sent = await interaction.followup.send(embed=embed)
+        last_command_msg_id[interaction.channel_id] = sent.id
+
+@tree.command(name="exportcsv", description="Xuất dữ liệu inactivity thành file CSV.")
+@app_commands.checks.has_permissions(administrator=True)
+async def slash_exportcsv(interaction: discord.Interaction):
+    await interaction.response.defer()
+    embed = make_embed("📤 Xuất CSV", "Tại đây bạn có thể thêm logic ghi file CSV và gửi lên.")
+    sent = await interaction.followup.send(embed=embed)
+    last_command_msg_id[interaction.channel_id] = sent.id
+
+@tree.command(name="help", description="Hiển thị danh sách lệnh của Skibidi Bot.")
+async def slash_help(interaction: discord.Interaction):
+    await interaction.response.defer()
+    embed = make_embed(
+        title="📖 Danh sách lệnh Skibidi Bot",
+        desc="Các lệnh hiện có:\n"
+             "• `/test` – Kiểm tra bot hoạt động.\n"
+             "• `/ping` – Xem độ trễ.\n"
+             "• `/config_info` – Thông tin cấu hình.\n"
+             "• `/runcheck` – Kiểm tra inactivity thủ công.\n"
+             "• `/recheck30days` – Kiểm tra lại người offline ≥30 ngày.\n"
+             "• `/list_off` – Danh sách offline ≥1 ngày.\n"
+             "• `/list_off_30days` – Danh sách offline ≥30 ngày.\n"
+             "• `/exportdb` – Xuất database.\n"
+             "• `/exportcsv` – Xuất file CSV.",
+        color=discord.Color.purple()
+    )
+    embed.set_footer(text="Skibidi Bot v6 • Phoebe Style 💜")
+    sent = await interaction.followup.send(embed=embed)
+    last_command_msg_id[interaction.channel_id] = sent.id
+
 # ===== Bot Events =====
 @bot.event
 async def on_ready():
@@ -239,4 +293,5 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
