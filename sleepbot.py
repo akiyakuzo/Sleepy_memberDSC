@@ -18,6 +18,7 @@ from flask import Flask
 from threading import Thread
 import csv
 import time
+import random
 
 # ===== Đường dẫn cơ bản =====
 BASE_DIR = pathlib.Path(__file__).parent
@@ -492,3 +493,4 @@ async def change_status():
 TOKEN = os.getenv("TOKEN")
 print(f"[DEBUG] TOKEN loaded: {bool(TOKEN)}")
 bot.run(TOKEN)
+
