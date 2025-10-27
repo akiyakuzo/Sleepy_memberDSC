@@ -1,9 +1,9 @@
+### 🧠 **Skibidi Bot — Sổ tay bảo trì nội bộ (Private)**
 
-# 🧠 Skibidi Bot — Sổ tay bảo trì nội bộ *(Private)*
-
-> **Phiên bản:** `v5_full_embed_v2style`  
-> **Dev:** Kiyaaaa  
-> **Mục tiêu:** Ổn định • Nhẹ • Miễn phí • Không vòng lặp Render
+> **Phiên bản:** `v6_full_embed_configsystem`
+> **Dev:** Kiyaaaa (Khải Trần)
+> **Mục tiêu:** Ổn định • Dễ bảo trì • Có cấu hình động qua slash command
+> **Nền:** Flask + Discord.py + SQLite
 
 ---
 
@@ -12,15 +12,15 @@
 Nếu bot ngừng hoạt động hoặc Render vừa redeploy, chạy:
 
 ```bash
-python3 skibidi_fixed_v3_full_embed_v2style.py
-````
+python3 skibidi_v6.py
+```
 
 Bot sẽ tự động:
 
 1. Mở Flask server tại cổng `8080`
 2. Tạo route `/` (cho UptimeRobot) và `/healthz` (cho Render)
 3. Delay 3 giây để Flask bind port
-4. Sau đó khởi động Discord bot
+4. Khởi động bot Discord (các lệnh slash auto sync)
 
 ---
 
@@ -31,33 +31,53 @@ Khai báo trong Render Secrets hoặc file `.env`:
 ```
 TOKEN=discord_bot_token
 ROLE_NAME=💤 Tín Đồ Ngủ Đông
-INACTIVE_DAYS=30
 PORT=8080
 ```
 
-> ⚠️ Nếu bạn dùng Render, PORT sẽ được tự cấp.
-> Chỉ cần khai báo TOKEN, các giá trị khác có thể để mặc định.
+> ⚙️ **Không cần khai báo INACTIVE_DAYS hoặc AUTO_DELETE_ENABLED nữa**
+> vì bot sẽ tự đọc / ghi vào `config.json`.
 
 ---
 
-## ⚙️ Kiểm tra hoạt động
+## ⚙️ Cấu hình động
 
-| Cách                | Mục đích                      | Kết quả mong đợi           |
-| ------------------- | ----------------------------- | -------------------------- |
-| Truy cập `/`        | Ping UptimeRobot giữ bot sống | 🟢 “Bot đang chạy ổn định” |
-| Truy cập `/healthz` | Health check Render           | `OK`                       |
-| `/test`             | Kiểm tra bot hoạt động        | Embed màu xanh lá hiện ra  |
-| `/runcheck`         | Kiểm tra thủ công             | Embed xanh lá khi hoàn tất |
-| `/config_info`      | Xem cấu hình hiện tại         | Hiển thị role, ngày, DB    |
+File `config.json` lưu cài đặt runtime, ví dụ:
+
+```json
+{
+  "INACTIVE_DAYS": 30,
+  "AUTO_DELETE_ENABLED": true
+}
+```
+
+Nếu file không tồn tại, bot sẽ **tự tạo mới** với giá trị mặc định.
+
+---
+
+## 🔧 Các lệnh Slash (v6)
+
+| Lệnh                  | Mô tả                                                              | Ghi chú                  |
+| --------------------- | ------------------------------------------------------------------ | ------------------------ |
+| `/runcheck`           | Chạy kiểm tra thủ công, gán role ngủ đông cho ai inact quá số ngày | Embed kết quả            |
+| `/config_info`        | Hiển thị thông tin cấu hình hiện tại                               | Gồm role, ngày, DB       |
+| `/setinactive <days>` | Thay đổi số ngày inactive cần thiết để add role                    | Ghi vào `config.json`    |
+| `/toggle_autodelete`  | Bật/tắt tự động xóa embed (v3s sau 3s)                             | Lưu vào `config.json`    |
+| `/status`             | Hiển thị số lượng người đang có role ngủ đông                      | Embed trực quan          |
+| `/exportdb`           | Xuất file `.db` để backup                                          | Gửi file SQLite          |
+| `/exportcsv`          | Xuất dữ liệu CSV dễ đọc                                            | Gửi file CSV             |
+| `/help`               | Danh sách lệnh với icon và thumbnail                               | Đã có ảnh, không bị mất  |
+| `/list_off`           | Danh sách thành viên đang bị role ngủ đông                         | Tự động paginate nếu dài |
+
+> 🔁 Tất cả các lệnh giữ nguyên style embed v5, thêm phần config logic của v6.
 
 ---
 
 ## 💾 Database: `inactivity.db`
 
-* Tự tạo nếu chưa tồn tại.
-* Lưu trữ các cột:
+* Tự tạo nếu chưa có.
+* Lưu các cột:
   `member_id`, `guild_id`, `last_seen`, `role_added`.
-* Không cần backup thường xuyên (có thể export khi cần).
+* Có thể export hoặc xóa reset dễ dàng.
 
 ### 📤 Backup thủ công
 
@@ -75,34 +95,71 @@ PORT=8080
 
 ## 🔁 Task định kỳ
 
-Bot tự động kiểm tra hoạt động mỗi **24 giờ/lần**:
+Bot sẽ tự động chạy kiểm tra mỗi **24h/lần**:
 
-* Nếu thành viên **offline ≥ 30 ngày** → gán role **💤 Tín Đồ Ngủ Đông**
-* Nếu thành viên **offline** → cập nhật `last_seen`
+* Nếu user **offline ≥ INACTIVE_DAYS** → add role ngủ đông
+* Nếu user online → update last_seen
 
-> Có thể chạy thủ công bất cứ lúc nào bằng `/runcheck`.
+> Có thể chạy ngay bằng `/runcheck`.
 
 ---
 
 ## 🧰 Debug nhanh
 
-| Vấn đề                                | Nguyên nhân                           | Cách xử lý                               |
-| ------------------------------------- | ------------------------------------- | ---------------------------------------- |
-| Bot không start trên Render           | Flask chưa bind port kịp              | Kiểm tra có `time.sleep(3)` ở cuối file  |
-| “Bad Gateway” / “Service Unavailable” | Thiếu `/healthz` hoặc Flask chưa chạy | Đảm bảo route `/healthz` tồn tại         |
-| Không thấy role `💤 Tín Đồ Ngủ Đông`  | Role chưa tạo trên server             | Tạo role và cấp quyền quản lý cho bot    |
-| Bot không add role                    | Thiếu quyền `Manage Roles`            | Kiểm tra quyền bot trên Discord          |
-| Database lỗi                          | File `.db` bị khóa                    | Stop bot → xóa `inactivity.db` → restart |
+| Vấn đề            | Nguyên nhân             | Giải pháp                         |
+| ----------------- | ----------------------- | --------------------------------- |
+| Bot không start   | Flask chưa bind port    | Kiểm tra `time.sleep(3)`          |
+| Role không add    | Bot thiếu quyền         | Cấp quyền `Manage Roles`          |
+| Flask log lỗi 503 | Render check quá sớm    | Ping lại sau 5s                   |
+| Không lưu config  | Bot không ghi được file | Kiểm tra quyền ghi `config.json`  |
+| Embed không xóa   | AUTO_DELETE = false     | Dùng `/toggle_autodelete` bật lại |
 
 ---
 
-## 🧹 Reset nhẹ (nếu cần)
+## ⚙️ Deployment nhanh trên Render
 
-Xóa DB cũ và khởi động lại:
+### 1️⃣ Fork hoặc upload repo lên GitHub
+
+Đảm bảo repo có file:
+
+```
+skibidi_v6.py
+requirements.txt
+runtime.txt
+```
+
+### 2️⃣ Vào [Render.com](https://render.com) → **New + Web Service**
+
+* **Environment:** Python
+* **Build Command:** *(để trống)*
+* **Start Command:**
+
+  ```bash
+  python3 skibidi_v6.py
+  ```
+
+### 3️⃣ Add các biến môi trường:
+
+```
+TOKEN=...
+ROLE_NAME=💤 Tín Đồ Ngủ Đông
+PORT=8080
+```
+
+### 4️⃣ Ping giữ online bằng UptimeRobot
+
+* URL: `https://tên-dịch-vụ.onrender.com/`
+* Ping mỗi 5 phút là đủ.
+
+---
+
+## 🧹 Reset nhẹ
+
+Xóa database và cấu hình, sau đó restart:
 
 ```bash
-rm inactivity.db
-python3 skibidi_fixed_v3_full_embed_v2style.py
+rm inactivity.db config.json
+python3 skibidi_v6.py
 ```
 
 ---
@@ -110,51 +167,26 @@ python3 skibidi_fixed_v3_full_embed_v2style.py
 ## 🧠 Ghi nhớ
 
 * Flask luôn khởi động **trước bot**
-* `/healthz` giữ cho Render không kill bot (không cần Replit keepalive)
-* SQLite an toàn, nhẹ và tự động tạo
-* Không nên auto-deploy quá thường xuyên (Render coi như “loop” nếu ping trùng build time)
+* `/healthz` giúp Render không kill tiến trình
+* SQLite + JSON config → gọn, dễ backup
+* Không cần auto-deploy lại sau mỗi lần chỉnh config
 
 ---
 
-## 💬 Ghi chú riêng
-
-> “Bot này không cần nhiều tiền — chỉ cần hiểu cách nó thở.”
-> — *Khải Trần, 2025*
-
----
-
-## 📜 Lịch sử thay đổi (Changelog)
-
-| Phiên bản      | Ngày    | Nội dung nổi bật                                 |
-| -------------- | ------- | ------------------------------------------------ |
-| **v1**         | 2024-12 | Khởi tạo Skibidi Bot (cơ bản)                    |
-| **v2**         | 2025-02 | Thêm Flask uptime và SQLite                      |
-| **v3**         | 2025-05 | Giao diện Embed đầy đủ, ổn định Render           |
-| **v3_fix**     | 2025-07 | Tối ưu Flask threading + role logic              |
-| **v4 (Slash)** | 2025-09 | Chuyển sang Slash Commands                       |
-| **v5.1**       | 2025-10 | Thêm auto-delete embed & delay chống spam Render |
-
----
-
-### 🧩 Cấu trúc repo gợi ý
+## 🧩 Cấu trúc repo gợi ý
 
 ```
 / (root)
-├── skibidi_v5_slash_autodelete.py
+├── skibidi_v6.py
+├── config.json
+├── inactivity.db
 ├── requirements.txt
 ├── runtime.txt
-├── README_INTERNAL.md
-└── inactivity.db  (tự tạo)
+├── README_INTERNAL_v6.md
+└── .gitignore
 ```
 
 ---
 
-*🫧 Document by Phoebe / Kiyaaaa – Internal Build Guide, 2025*
-
-```
-
----
-
-Bạn có muốn tôi **thêm thêm phần “Deployment nhanh trên Render (Quick Deploy Steps)”** ở ngay sau phần “Khởi động nhanh” không?  
-Nó sẽ hướng dẫn copy repo → set env → nhấn deploy, dành riêng cho Render.
-```
+> “Bot không cần sức mạnh — chỉ cần logic đủ nhẹ để tự sống.”
+> — Kiyaaaa, 2025*
