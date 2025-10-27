@@ -332,8 +332,7 @@ async def slash_exportcsv(interaction: discord.Interaction):
         print(f"⚠️ Không thể xóa file CSV tạm: {e}")
 
 from discord.ui import View, Button
-
-# ===== /help paginate =====
+# ===== /help paginate =====
 @tree.command(name="help", description="Hiển thị danh sách lệnh của Skibidi Bot (tương tác paginate).")
 async def slash_help(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
@@ -355,41 +354,45 @@ async def slash_help(interaction: discord.Interaction):
     PAGE_SIZE = 4
     pages = [commands_list[i:i+PAGE_SIZE] for i in range(0, len(commands_list), PAGE_SIZE)]
     total_pages = len(pages)
-    current_page = 0
 
+    # Hàm tạo embed từng trang
     def make_help_embed(page_idx):
         embed = make_embed(
-            title=f"📖 Danh sách lệnh Skibidi Bot (Page {page_idx+1}/{total_pages})",
+            title=f"📖 Danh sách lệnh Skibidi Bot (Trang {page_idx+1}/{total_pages})",
             color=discord.Color.purple()
         )
         for name, desc in pages[page_idx]:
             embed.add_field(name=name, value=desc, inline=False)
+        embed.set_thumbnail(url="https://files.catbox.moe/rvvejl.png")  # logo Phoebe style
         embed.set_footer(text="Skibidi Bot v6 • Phoebe Style 💜")
         return embed
 
     # View với nút Back/Next
     class HelpView(View):
         def __init__(self):
-            super().__init__(timeout=60)  # 60s tự hết hạn
+            super().__init__(timeout=90)
             self.current_page = 0
 
         async def update_message(self, interaction):
-            await interaction.message.edit(embed=make_help_embed(self.current_page), view=self)
+            await interaction.response.edit_message(
+                embed=make_help_embed(self.current_page),
+                view=self
+            )
 
-        @discord.ui.button(label="⬅ Back", style=discord.ButtonStyle.gray)
+        @discord.ui.button(label="⬅ Trước", style=discord.ButtonStyle.gray)
         async def back_button(self, button: Button, interaction: discord.Interaction):
             if self.current_page > 0:
                 self.current_page -= 1
                 await self.update_message(interaction)
 
-        @discord.ui.button(label="Next ➡", style=discord.ButtonStyle.gray)
+        @discord.ui.button(label="Tiếp ➡", style=discord.ButtonStyle.gray)
         async def next_button(self, button: Button, interaction: discord.Interaction):
             if self.current_page < total_pages - 1:
                 self.current_page += 1
                 await self.update_message(interaction)
 
     view = HelpView()
-    sent = await interaction.followup.send(embed=make_help_embed(current_page), view=view)
+    sent = await interaction.followup.send(embed=make_help_embed(0), view=view)
     last_command_msg_id[interaction.channel_id] = sent.id
 
 # ===== Bot Events =====
