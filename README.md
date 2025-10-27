@@ -12,7 +12,7 @@
 If the bot stops or the Render service just redeployed, run:
 
 ```bash
-python3 skibidi_v6.py
+python3 sleepbot.py
 ```
 
 The bot will automatically:
