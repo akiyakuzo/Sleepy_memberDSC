@@ -471,6 +471,23 @@ async def exportdb(interaction: discord.Interaction):
 async def on_ready():
     await tree.sync()
     print(f"✅ Skibidi Bot v6 đã sẵn sàng! Đăng nhập dưới: {bot.user}")
+    change_status.start()  # Bắt đầu vòng lặp status động
+
+# ===== Vòng lặp đổi status =====
+status_list = [
+    "Ngủ đông với Phoebe 💜",
+    "Đi kiểm tra inactivity",
+    "Đang Check Var Member",
+    "Theo dõi server"
+]
+
+@tasks.loop(seconds=30)
+async def change_status():
+    status = random.choice(status_list)
+    await bot.change_presence(
+        status=discord.Status.online,
+        activity=discord.Game(status)
+    )
 
 TOKEN = os.getenv("TOKEN")
 print(f"[DEBUG] TOKEN loaded: {bool(TOKEN)}")
