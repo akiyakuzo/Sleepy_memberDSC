@@ -1,4 +1,4 @@
-### 🧠 **Skibidi Bot — Sổ tay bảo trì nội bộ (Private)**
+### 🧠 **Sleep Bot — Sổ tay bảo trì nội bộ (Private)**
 
 > **Phiên bản:** `v6_full_embed_configsystem`
 > **Dev:** Kiyaaaa (Khải Trần)
