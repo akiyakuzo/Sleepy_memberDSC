@@ -259,7 +259,6 @@ async def on_ready():
     await tree.sync()
     print(f"✅ Skibidi Bot v6 đã sẵn sàng! Đăng nhập dưới: {bot.user}")
 
-TOKEN = os.getenv("DISCORD_TOKEN")
+TOKEN = os.getenv("TOKEN")
 print(f"[DEBUG] TOKEN loaded: {bool(TOKEN)}")
 bot.run(TOKEN)
-
