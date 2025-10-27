@@ -36,7 +36,7 @@ def health():
     return "OK"
 
 def run_flask():
-    port = int(os.getenv("PORT", 8080))
+    port = int(os.getenv("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
 
 Thread(target=run_flask).start()
@@ -274,4 +274,5 @@ async def on_ready():
 TOKEN = os.getenv("TOKEN")
 print(f"[DEBUG] TOKEN loaded: {bool(TOKEN)}")
 bot.run(TOKEN)
+
 
