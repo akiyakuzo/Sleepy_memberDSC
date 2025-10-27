@@ -15,29 +15,41 @@ import asyncio
 import json
 import pathlib
 from flask import Flask
-from waitress import serve
 from threading import Thread
 import csv
+import time
 
-# ===== Đường dẫn chính =====
+# ===== Đường dẫn cơ bản =====
 BASE_DIR = pathlib.Path(__file__).parent
 DB_PATH = BASE_DIR / "inactivity.db"
 CONFIG_PATH = BASE_DIR / "config.json"
 
-# ===== Flask giữ bot online =====
+# ===== Flask Uptime Server =====
 app = Flask(__name__)
+
 @app.route('/')
 def home():
-    return "Skibidi Bot v6 đang hoạt động 💜"
-def run_web():
-    serve(app, host="0.0.0.0", port=8080)
-Thread(target=run_web, daemon=True).start()
+    return "🟢 Skibidi Bot v6 đang chạy ổn định!"
 
-# ===== Hàm khởi tạo file config.json =====
+@app.route('/healthz')
+def health():
+    return "OK"
+
+def run_flask():
+    port = int(os.getenv("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
+
+Thread(target=run_flask).start()
+time.sleep(3)  # Đảm bảo Flask đã bind cổng trước khi bot chạy
+
+# ===== Cấu hình & config.json =====
 DEFAULT_CONFIG = {
     "INACTIVE_DAYS": 30,
     "AUTO_DELETE_ENABLED": True
 }
+
+CONFIG_PATH = pathlib.Path(__file__).parent / "config.json"
+
 def load_config():
     if not CONFIG_PATH.exists():
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
@@ -262,3 +274,4 @@ async def on_ready():
 TOKEN = os.getenv("TOKEN")
 print(f"[DEBUG] TOKEN loaded: {bool(TOKEN)}")
 bot.run(TOKEN)
+
